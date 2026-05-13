@@ -1,0 +1,11 @@
+Total symbols loaded: 26
+Date range: 2022-01-01 00:00:00 to 2025-12-31 00:00:00
+In-sample dates: 1022
+Out-of-sample dates: 439
+
+Top 3 signals by ICIR:
+  volatility: ICIR=0.327, t=12.29
+  volatility: ICIR=0.290, t=10.91
+  price_to_high: ICIR=0.272, t=10.21
+
+Signals with t_stat > 2.0: reversal_1d, reversal_1w, momentum_30d, momentum_90d, volatility, vol_compression, price_to_high
