@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr, pearsonr, rankdata
 import matplotlib.pyplot as plt
+from statsmodels.stats.sandwich_covariance import cov_hac
 
 # === PARAMETERS ===
 REVERSAL_SHORT = 1
@@ -19,7 +20,7 @@ LIQUIDITY_WIN = 30
 VOLUME_WIN = 30
 PRICE_HIGH_WIN = 30
 TAKER_WIN = 3
-MIN_SYMBOLS_PER_DATE = 5
+MIN_SYMBOLS_PER_DATE = 15
 WINSOR_PCTS = (0.01, 0.99)
 IC_DECAY_HORIZONS = [1, 2, 3, 5, 10, 20]
 IN_SAMPLE_RATIO = 0.7
@@ -53,9 +54,11 @@ def compute_signals(symbols):
     """Compute all signals per symbol, return panel dict {signal: DataFrame}."""
     print("Computing signals...")
     signal_names = [
-        'reversal_1d', 'reversal_1w', 'momentum_30d', 'momentum_90d',
+        'reversal_1d', 'reversal_1w', 'momentum_30d',
         'volatility', 'liquidity', 'vol_compression', 'volume_compression',
-        'price_to_high', 'taker_buy_contrarian', 'quote_liquidity'
+        'taker_buy_contrarian',
+        # New signals
+        'clv', 'taker_imbalance_momentum', 'intraday_range_ratio',
     ]
     signals = {s: {} for s in signal_names}
     
@@ -64,7 +67,6 @@ def compute_signals(symbols):
         high = df['high']
         low = df['low']
         volume = df['volume']
-        quote_volume = df['quote_volume']
         taker_buy = df['taker_buy_volume']
         high_low = (high - low).replace(0, np.nan)
         pct = close.pct_change()
@@ -72,14 +74,28 @@ def compute_signals(symbols):
         signals['reversal_1d'][symbol] = -pct
         signals['reversal_1w'][symbol] = -close.pct_change(REVERSAL_LONG)
         signals['momentum_30d'][symbol] = close / close.shift(MOMENTUM_MED) - 1
-        signals['momentum_90d'][symbol] = close / close.shift(MOMENTUM_LONG) - 1
         signals['volatility'][symbol] = -pct.rolling(VOL_WINDOW).std()
         signals['liquidity'][symbol] = (volume / high_low).rolling(LIQUIDITY_WIN).mean()
         signals['vol_compression'][symbol] = pct.rolling(VOL_SHORT).std() / pct.rolling(VOL_WINDOW).std()
         signals['volume_compression'][symbol] = volume / volume.rolling(VOLUME_WIN).mean()
-        signals['price_to_high'][symbol] = close / close.rolling(PRICE_HIGH_WIN).max()
         signals['taker_buy_contrarian'][symbol] = -(taker_buy / volume).rolling(TAKER_WIN).mean()
-        signals['quote_liquidity'][symbol] = (quote_volume / high_low).rolling(LIQUIDITY_WIN).mean()
+
+        # New Signal 1: Close Location Value (CLV)
+        # (close - low) / (high - low), rolling 5d mean
+        # Buying pressure proxy: 1 = closed at high, 0 = closed at low
+        clv_raw = (close - low) / high_low
+        signals['clv'][symbol] = clv_raw.rolling(5).mean()
+
+        # New Signal 2: Taker Imbalance Momentum
+        # Change in taker_buy_ratio over 5 days (delta of sentiment, not level)
+        taker_ratio = taker_buy / volume
+        signals['taker_imbalance_momentum'][symbol] = taker_ratio.diff(5)
+
+        # New Signal 3: Intraday Range Ratio
+        # (high - low) / close, 5d mean vs 30d mean
+        # <1 = volatility compression -> potential breakout signal
+        daily_range = high_low / close
+        signals['intraday_range_ratio'][symbol] = daily_range.rolling(5).mean() / daily_range.rolling(30).mean()
     
     # Convert to DataFrames (date x symbol)
     for sig in signal_names:
@@ -136,6 +152,9 @@ def compute_ic(signals, fwd_returns, in_sample_dates=None, out_sample_dates=None
             fwd_df = fwd_returns[h]
             ics_spearman, ics_pearson = [], []
             ics_in, ics_out = [], []
+            ics_sub1, ics_sub2 = [], []  # subsample stability: 2022-2023 vs 2024-2025
+            
+            sub1_cutoff = pd.Timestamp('2024-01-01')  # before = sub1, after = sub2
             
             for date in sig_df.index:
                 if date not in fwd_df.index:
@@ -162,31 +181,66 @@ def compute_ic(signals, fwd_returns, in_sample_dates=None, out_sample_dates=None
                     ics_in.append(ic_s)
                 elif out_sample_dates and date in out_sample_dates:
                     ics_out.append(ic_s)
+                
+                # Subsample stability
+                if date < sub1_cutoff:
+                    ics_sub1.append(ic_s)
+                else:
+                    ics_sub2.append(ic_s)
             
             if len(ics_spearman) == 0:
                 continue
             
             ic_arr = np.array(ics_spearman)
             ic_mean = ic_arr.mean()
+            ic_median = np.median(ic_arr)
             ic_std = ic_arr.std()
             icir = ic_mean / ic_std if ic_std > 0 else 0
-            t_stat = ic_mean / (ic_std / np.sqrt(len(ic_arr))) if ic_std > 0 else 0
+            
+            # Standard t-stat (baseline)
+            t_stat_std = ic_mean / (ic_std / np.sqrt(len(ic_arr))) if ic_std > 0 else 0
+            
+            # Newey-West t-stat (5 lags) — corrects for autocorrelation in IC series
+            # Standard t-stat overstates significance by 20-30% when IC is autocorrelated
+            try:
+                nw_lags = 5
+                ic_demeaned = ic_arr - ic_mean
+                # HAC variance: Newey-West
+                T = len(ic_arr)
+                # Manual Newey-West: Var = gamma_0 + 2 * sum_l (1 - l/(nw_lags+1)) * gamma_l
+                gamma_0 = np.sum(ic_demeaned ** 2) / T
+                hac_var = gamma_0
+                for lag in range(1, nw_lags + 1):
+                    weight = 1.0 - lag / (nw_lags + 1)
+                    gamma_l = np.sum(ic_demeaned[lag:] * ic_demeaned[:-lag]) / T
+                    hac_var += 2 * weight * gamma_l
+                hac_var = max(hac_var, 1e-12)  # floor at near-zero
+                t_stat = ic_mean / np.sqrt(hac_var / T)
+            except Exception:
+                t_stat = t_stat_std  # fallback
+            
             pct_pos = (ic_arr > 0).mean()
             
             ic_mean_in = np.mean(ics_in) if ics_in else np.nan
             ic_mean_out = np.mean(ics_out) if ics_out else np.nan
+            ic_mean_sub1 = np.mean(ics_sub1) if ics_sub1 else np.nan   # 2022-2023
+            ic_mean_sub2 = np.mean(ics_sub2) if ics_sub2 else np.nan   # 2024-2025
             
             results.append({
                 'signal': sig_name,
                 'horizon': h,
                 'IC_mean': ic_mean,
+                'IC_median': ic_median,
                 'IC_std': ic_std,
                 'ICIR': icir,
                 't_stat': t_stat,
+                't_stat_std': t_stat_std,
                 'pct_positive': pct_pos,
                 'turnover_mean': np.nan,  # filled later
                 'IC_mean_in': ic_mean_in,
                 'IC_mean_out': ic_mean_out,
+                'IC_sub1_2022_2023': ic_mean_sub1,
+                'IC_sub2_2024_2025': ic_mean_sub2,
                 'n_days': len(ics_spearman)
             })
     
@@ -256,12 +310,33 @@ def create_charts(ic_df):
     ax.axvline(0.02, color='gray', linestyle='--', linewidth=0.5)
     ax.axvline(-0.02, color='gray', linestyle='--', linewidth=0.5)
     
-    for i, (ic, t) in enumerate(zip(h1['IC_mean'], h1['t_stat'])):
-        ax.text(ic, i, f' {ic:.3f} (t={t:.2f})', va='center', fontsize=8)
+    for i, (ic, t, t_std) in enumerate(zip(h1['IC_mean'], h1['t_stat'], h1['t_stat_std'])):
+        ax.text(ic, i, f' {ic:.3f} (NW t={t:.2f}, std t={t_std:.2f})', va='center', fontsize=7)
     
     plt.tight_layout()
     plt.savefig('ic_chart.png', dpi=150)
     plt.close()
+    
+    # Subsample stability chart (2022-2023 vs 2024-2025)
+    h1_sub = ic_df[ic_df['horizon'] == 1].copy()
+    h1_sub = h1_sub.dropna(subset=['IC_sub1_2022_2023', 'IC_sub2_2024_2025'])
+    h1_sub = h1_sub.sort_values('IC_mean', key=lambda x: abs(x), ascending=True)
+    
+    if len(h1_sub) > 0:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        y_pos = np.arange(len(h1_sub))
+        width = 0.35
+        ax.barh(y_pos - width/2, h1_sub['IC_sub1_2022_2023'], width, label='2022-2023', color='steelblue', alpha=0.8)
+        ax.barh(y_pos + width/2, h1_sub['IC_sub2_2024_2025'], width, label='2024-2025', color='darkorange', alpha=0.8)
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(h1_sub['signal'])
+        ax.set_xlabel('IC Mean')
+        ax.set_title('Subsample Stability: 2022-2023 vs 2024-2025 (Horizon=1)')
+        ax.axvline(0, color='black', linewidth=0.5)
+        ax.legend()
+        plt.tight_layout()
+        plt.savefig('ic_subsample_chart.png', dpi=150)
+        plt.close()
     
     # IC Decay
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -305,10 +380,35 @@ def save_outputs(ic_df, n_symbols, date_start, date_end, in_sample, out_sample):
         f.write(f"Date range: {date_start} to {date_end}\n")
         f.write(f"In-sample dates: {len(in_sample)}\n")
         f.write(f"Out-of-sample dates: {len(out_sample)}\n\n")
-        f.write("Top 3 signals by ICIR:\n")
+        
+        f.write("=== IC at Horizon=1 (sorted by |NW t-stat|) ===\n")
+        h1 = ic_df[ic_df['horizon'] == 1].copy()
+        h1['abs_t'] = h1['t_stat'].abs()
+        h1 = h1.sort_values('abs_t', ascending=False)
+        f.write(f"{'Signal':<30} {'IC_mean':>8} {'IC_median':>10} {'NW_t':>8} {'std_t':>8} {'ICIR':>7} {'%pos':>6}\n")
+        f.write("-" * 80 + "\n")
+        for _, row in h1.iterrows():
+            sig_flag = "✅" if abs(row['t_stat']) > 2.0 else ("⚠️" if abs(row['t_stat']) > 1.5 else "❌")
+            f.write(f"{row['signal']:<30} {row['IC_mean']:>8.4f} {row['IC_median']:>10.4f} "
+                    f"{row['t_stat']:>8.2f} {row['t_stat_std']:>8.2f} {row['ICIR']:>7.3f} "
+                    f"{row['pct_positive']:>6.2%}  {sig_flag}\n")
+        
+        f.write("\n=== Subsample Stability (Horizon=1): 2022-2023 vs 2024-2025 ===\n")
+        f.write(f"{'Signal':<30} {'sub1_IC':>10} {'sub2_IC':>10} {'sign_flip':>10}\n")
+        f.write("-" * 65 + "\n")
+        for _, row in h1.iterrows():
+            s1 = row['IC_sub1_2022_2023']
+            s2 = row['IC_sub2_2024_2025']
+            if pd.isna(s1) or pd.isna(s2):
+                continue
+            flip = "⚠️ FLIP" if np.sign(s1) != np.sign(s2) else "✅ stable"
+            f.write(f"{row['signal']:<30} {s1:>10.4f} {s2:>10.4f} {flip:>10}\n")
+        
+        f.write("\n=== Top 3 by ICIR (all horizons) ===\n")
+        top_icir = ic_df.nlargest(3, 'ICIR')[['signal', 'horizon', 'ICIR', 't_stat']]
         for _, row in top_icir.iterrows():
-            f.write(f"  {row['signal']}: ICIR={row['ICIR']:.3f}, t={row['t_stat']:.2f}\n")
-        f.write(f"\nSignals with t_stat > 2.0: {', '.join(sig_tstat) if len(sig_tstat) else 'None'}\n")
+            f.write(f"  {row['signal']} h={int(row['horizon'])}: ICIR={row['ICIR']:.3f}, NW t={row['t_stat']:.2f}\n")
+        
         if warnings:
             f.write("\n" + "\n".join(warnings) + "\n")
 
