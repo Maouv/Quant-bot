@@ -49,17 +49,38 @@ def load_data(data_dir='./merged_data/'):
     print(f"Loaded {len(symbols)} symbols")
     return symbols
 
+# === METRICS LOADING ===
+def load_metrics(metrics_dir='./merged_metrics/'):
+    """Load Binance Vision metrics daily CSVs. Returns {} if not found."""
+    metrics = {}
+    files = glob.glob(os.path.join(metrics_dir, '*-metrics-daily.csv'))
+    if not files:
+        print("No metrics data found — skipping metrics signals")
+        return metrics
+    for fp in files:
+        sym = os.path.basename(fp).replace('-metrics-daily.csv', '')
+        df  = pd.read_csv(fp, index_col='date', parse_dates=True)
+        metrics[sym] = df
+    print(f"Loaded metrics for {len(metrics)} symbols")
+    return metrics
+
 # === SIGNAL CALCULATION ===
-def compute_signals(symbols):
+def compute_signals(symbols, metrics=None):
     """Compute all signals per symbol, return panel dict {signal: DataFrame}."""
     print("Computing signals...")
     signal_names = [
         'reversal_1d', 'reversal_1w', 'momentum_30d',
         'volatility', 'liquidity', 'vol_compression', 'volume_compression',
         'taker_buy_contrarian',
-        # New signals
+        # New OHLCV signals
         'clv', 'taker_imbalance_momentum', 'intraday_range_ratio',
     ]
+    # Add metrics signals if data available
+    metrics_signal_names = []
+    if metrics:
+        metrics_signal_names = ['ls_contrarian', 'top_trader_contr', 'oi_price_signal']
+        signal_names += metrics_signal_names
+
     signals = {s: {} for s in signal_names}
     
     for symbol, df in symbols.items():
@@ -98,10 +119,50 @@ def compute_signals(symbols):
         signals['intraday_range_ratio'][symbol] = daily_range.rolling(5).mean() / daily_range.rolling(30).mean()
     
     # Convert to DataFrames (date x symbol)
-    for sig in signal_names:
-        signals[sig] = pd.DataFrame(signals[sig])
-    
-    print(f"Computed {len(signal_names)} signals")
+    for sig in list(signal_names):
+        if sig not in metrics_signal_names:
+            signals[sig] = pd.DataFrame(signals[sig])
+
+    # === METRICS SIGNALS ===
+    if metrics:
+        ls_con   = {}
+        tt_con   = {}
+        oi_price = {}
+
+        for sym, mdf in metrics.items():
+            if sym not in symbols:
+                continue
+            close_s = symbols[sym]['close']
+
+            # L/S contrarian: fade retail crowd (long when crowd is short)
+            if 'ls_ratio_mean' in mdf.columns:
+                ls_con[sym] = -mdf['ls_ratio_mean']
+
+            # Top trader contrarian
+            if 'top_trader_ls_mean' in mdf.columns:
+                tt_con[sym] = -mdf['top_trader_ls_mean']
+
+            # OI-price divergence: -(OI_pct_5d - price_pct_5d)
+            # Needs enough history for 5d pct_change — early rows will be NaN (correct)
+            if 'oi_value' in mdf.columns:
+                oi_pct5    = mdf['oi_value'].pct_change(5)
+                price_pct5 = close_s.reindex(mdf.index).pct_change(5)
+                oi_price[sym] = -(oi_pct5 - price_pct5)
+
+        if ls_con:
+            signals['ls_contrarian']    = pd.DataFrame(ls_con)
+        if tt_con:
+            signals['top_trader_contr'] = pd.DataFrame(tt_con)
+        if oi_price:
+            signals['oi_price_signal']  = pd.DataFrame(oi_price)
+
+        # Drop metrics keys that got no data
+        for k in metrics_signal_names:
+            if isinstance(signals.get(k), dict):
+                del signals[k]
+
+    print(f"Computed {len(signals)} signals"
+          + (f" (incl. {len([k for k in signals if k in metrics_signal_names])} metrics)" if metrics else ""))
     return signals
 
 # === PREPROCESSING ===
@@ -415,7 +476,8 @@ def save_outputs(ic_df, n_symbols, date_start, date_end, in_sample, out_sample):
 # === MAIN ===
 if __name__ == '__main__':
     symbols = load_data()
-    signals = compute_signals(symbols)
+    metrics = load_metrics()
+    signals = compute_signals(symbols, metrics)
     signals, fwd_returns = preprocess(signals, symbols)
     in_sample, out_sample, date_start, date_end = split_dates(signals)
     
