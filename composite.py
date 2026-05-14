@@ -45,21 +45,18 @@ WINSOR_PCTS  = (0.01, 0.99)
 
 # ── SIGNAL DEFINITIONS & FIXED WEIGHTS (Opus validated) ──────────────────────
 #
-# Fast composite (h=1): 5 OHLCV signals only
-# Weights: ICIR-weighted, volume_compression 50% haircut, renormalized
+# Fast composite (h=1): 3 signals only — trim dead weight per Opus Plan 2
+# Drop: reversal_1d (NW_t=2.64, below 2.5 threshold) and volume_compression (OOS drop)
+# Keep: volatility + liquidity (structural) + reversal_1w (diversifier, NW_t=2.92)
 FAST_SIGNALS = [
     "volatility",
     "liquidity",
-    "volume_compression",
     "reversal_1w",
-    "reversal_1d",
 ]
 FAST_WEIGHTS = {
-    "liquidity":          (-1, 0.30),   # (sign, weight)
-    "volatility":         (+1, 0.29),
-    "reversal_1w":        (+1, 0.17),
-    "reversal_1d":        (+1, 0.12),
-    "volume_compression": (-1, 0.12),
+    "volatility":  (+1, 0.42),  # ICIR=0.186, dominant structural factor
+    "liquidity":   (-1, 0.36),  # ICIR=0.156, second structural factor
+    "reversal_1w": (+1, 0.22),  # ICIR=0.074, mean-reversion diversifier
 }
 
 # Slow composite (h=20): 4 signals, ls_contrarian dropped (OOS collapse 93%)
@@ -521,24 +518,24 @@ def create_charts(ic_df: pd.DataFrame, fast_scores: pd.DataFrame,
 
 # ── SAVE OUTPUTS ──────────────────────────────────────────────────────────────
 
-def save_outputs(fast_scores, slow_scores, fast_weights, slow_weights, ic_df):
+def save_outputs(fast_scores, slow_scores, meta_scores, fast_weights, slow_weights, ic_df, meta_ic_df):
     Path(OUT_DIR).mkdir(exist_ok=True)
 
-    # Composite scores — labeled by composite name
-    fast_out = fast_scores.copy()
-    fast_out.index.name = "date"
-    fast_out.to_csv(f"{OUT_DIR}/composite_scores_fast.csv")
+    # Individual composite scores
+    fast_scores.to_csv(f"{OUT_DIR}/composite_scores_fast.csv")
+    slow_scores.to_csv(f"{OUT_DIR}/composite_scores_slow.csv")
+    meta_scores.to_csv(f"{OUT_DIR}/composite_scores_meta.csv")
 
-    slow_out = slow_scores.copy()
-    slow_out.index.name = "date"
-    slow_out.to_csv(f"{OUT_DIR}/composite_scores_slow.csv")
-
-    # Combined scores file (portfolio.py will read this)
+    # Combined long format — portfolio.py reads this
     fast_stack = fast_scores.stack().reset_index()
     fast_stack.columns = ["date", "symbol", "score_fast"]
     slow_stack = slow_scores.stack().reset_index()
     slow_stack.columns = ["date", "symbol", "score_slow"]
+    meta_stack = meta_scores.stack().reset_index()
+    meta_stack.columns = ["date", "symbol", "score_meta"]
+
     combined = fast_stack.merge(slow_stack, on=["date", "symbol"], how="outer")
+    combined = combined.merge(meta_stack, on=["date", "symbol"], how="outer")
     combined.to_csv(f"{OUT_DIR}/composite_scores.csv", index=False)
 
     # Weights
@@ -547,6 +544,8 @@ def save_outputs(fast_scores, slow_scores, fast_weights, slow_weights, ic_df):
 
     # IC summary
     ic_df.to_csv(f"{OUT_DIR}/composite_ic.csv", index=False)
+    if not meta_ic_df.empty:
+        meta_ic_df.to_csv(f"{OUT_DIR}/composite_ic_meta.csv", index=False)
 
     # Text summary
     with open(f"{OUT_DIR}/composite_summary.txt", "w") as f:
@@ -564,16 +563,21 @@ def save_outputs(fast_scores, slow_scores, fast_weights, slow_weights, ic_df):
                         f"{row['pct_pos']:>6.0%} {row['type']:>12}\n")
             f.write("\n")
 
+        if not meta_ic_df.empty:
+            f.write("--- Meta-Composite (Fast 36% + Slow 64%) ---\n")
+            f.write(f"{'Label':<30} {'IC_mean':>8} {'IC_med':>8} {'NW_t':>7} "
+                    f"{'ICIR':>7} {'%pos':>6}\n")
+            f.write("-" * 75 + "\n")
+            for _, row in meta_ic_df.iterrows():
+                f.write(f"{row['label']:<30} {row['IC_mean']:>8.4f} {row['IC_median']:>8.4f} "
+                        f"{row['t_stat_NW']:>7.2f} {row['ICIR']:>7.3f} "
+                        f"{row['pct_pos']:>6.0%}\n")
+
     print(f"\n✅ Outputs saved to {OUT_DIR}/")
-    print(f"   composite_scores.csv        ← input for portfolio.py")
-    print(f"   composite_scores_fast.csv")
-    print(f"   composite_scores_slow.csv")
-    print(f"   composite_weights_fast.csv")
-    print(f"   composite_weights_slow.csv")
-    print(f"   composite_ic.csv")
+    print(f"   composite_scores.csv         ← input for portfolio.py (fast+slow+meta)")
+    print(f"   composite_scores_meta.csv    ← meta-composite scores")
+    print(f"   composite_ic_meta.csv        ← meta IC across horizons")
     print(f"   composite_summary.txt")
-    print(f"   composite_chart.png")
-    print(f"   composite_decay_chart.png")
 
 
 # ── MAIN ──────────────────────────────────────────────────────────────────────
@@ -615,11 +619,58 @@ def main():
     # Combine IC results
     ic_df = pd.DataFrame(fast_ic + slow_ic)
 
+    # Build Meta-Composite (Plan 1 — blend Fast + Slow)
+    print("\n=== BUILDING META-COMPOSITE (Fast + Slow blend) ===")
+    # ICIR-proportional weights: Fast=0.213, Slow=0.381
+    # Fast/(Fast+Slow) = 0.213/0.594 = 0.36, Slow = 0.64
+    META_WEIGHT_FAST = 0.36
+    META_WEIGHT_SLOW = 0.64
+
+    # Align on common dates and symbols
+    common_dates = fast_scores.index.intersection(slow_scores.index)
+    common_syms  = fast_scores.columns.intersection(slow_scores.columns)
+    fast_aligned = fast_scores.loc[common_dates, common_syms]
+    slow_aligned = slow_scores.loc[common_dates, common_syms]
+
+    # Slow score smoothed — rebalances weekly not daily
+    slow_smoothed = slow_aligned.rolling(5, min_periods=1).mean()
+
+    # Blend
+    meta_scores = META_WEIGHT_FAST * fast_aligned + META_WEIGHT_SLOW * slow_smoothed
+
+    # Re-normalize cross-sectionally
+    meta_scores = zscore_cs(meta_scores)
+
+    # Compute meta-composite IC at h=1 and h=5
+    print(f"  Meta-composite IC:")
+    meta_ic_results = []
+    for h in [1, 2, 3, 5, 10, 20]:
+        ic_ts  = compute_ic_series(meta_scores, fwd_returns[h])
+        ic_arr = np.array(ic_ts)
+        valid  = ic_arr[~np.isnan(ic_arr)]
+        if len(valid) == 0:
+            continue
+        summary = summarize_ic(valid, f"★ META h={h}")
+        if summary:
+            summary["composite"] = "Meta"
+            summary["type"]      = "composite"
+            meta_ic_results.append(summary)
+
+    meta_ic_df = pd.DataFrame(meta_ic_results)
+
+    # Correlation between Fast and Slow daily scores
+    corr = fast_aligned.values.flatten()
+    slow_flat = slow_aligned.values.flatten()
+    mask = ~(np.isnan(corr) | np.isnan(slow_flat))
+    if mask.sum() > 0:
+        correlation = np.corrcoef(corr[mask], slow_flat[mask])[0, 1]
+        print(f"\n  Fast-Slow score correlation: {correlation:.3f} (target < 0.5)")
+
     # Charts
     create_charts(ic_df, fast_scores, slow_scores, fwd_returns, signals)
 
     # Save all outputs
-    save_outputs(fast_scores, slow_scores, fast_weights, slow_weights, ic_df)
+    save_outputs(fast_scores, slow_scores, meta_scores, fast_weights, slow_weights, ic_df, meta_ic_df)
 
     print("\nDone.")
 
