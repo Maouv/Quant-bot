@@ -1,0 +1,20 @@
+=== COMPOSITE SIGNAL SUMMARY ===
+
+--- Fast Composite ---
+Label                           IC_mean   IC_med    NW_t    ICIR   %pos         type
+----------------------------------------------------------------------------------
+volatility                       0.0675   0.0788    7.67   0.186    58%   individual
+★ Fast COMPOSITE                 0.0601   0.0680    8.12   0.213    59%    composite
+liquidity                       -0.0438  -0.0448   -5.69  -0.156    45%   individual
+volume_compression              -0.0244  -0.0325   -3.43  -0.095    46%   individual
+reversal_1w                      0.0219   0.0182    2.92   0.074    53%   individual
+
+--- Slow Composite ---
+Label                           IC_mean   IC_med    NW_t    ICIR   %pos         type
+----------------------------------------------------------------------------------
+volatility                       0.1167   0.1623    5.40   0.328    65%   individual
+★ Slow COMPOSITE                 0.1099   0.1346    6.33   0.379    66%    composite
+liquidity                       -0.0983  -0.1232   -5.71  -0.347    37%   individual
+taker_buy_contrarian            -0.0792  -0.0831   -6.09  -0.309    37%   individual
+momentum_30d                     0.0517   0.0631    3.40   0.192    59%   individual
+
