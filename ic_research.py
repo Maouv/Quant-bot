@@ -171,6 +171,11 @@ def compute_signals(symbols, metrics=None):
 def preprocess(signals, symbols):
     """Z-score normalize signals, compute forward returns panel."""
     print("Preprocessing...")
+
+    # Debug: print signal count and sample dates
+    for sig_name, sig_df in signals.items():
+        non_null = sig_df.notna().any(axis=1).sum()
+        print(f"  {sig_name:<30} rows={len(sig_df)}  non-null-dates={non_null}")
     
     # Z-score each signal cross-sectionally
     for sig_name, sig_df in signals.items():
@@ -180,10 +185,13 @@ def preprocess(signals, symbols):
             return ((x - x.mean()) / x.std()).clip(-CLIP_ZSCORE, CLIP_ZSCORE)
         signals[sig_name] = sig_df.apply(zscore, axis=1)
     
-    # Build forward returns panel
+    # Build forward returns panel — use union of ALL signal dates (incl. metrics)
     all_dates = set()
     for df in symbols.values():
         all_dates.update(df.index)
+    # Also include metrics signal dates so IC can be computed on those dates
+    for sig_name, sig_df in signals.items():
+        all_dates.update(sig_df.index)
     all_dates = sorted(all_dates)
     
     fwd_returns = {}
