@@ -62,21 +62,19 @@ FAST_WEIGHTS = {
     "volume_compression": (-1, 0.12),
 }
 
-# Slow composite (h=20): 5 signals incl. metrics
-# Weights: ICIR-weighted at h=20 (from ic_results.csv)
+# Slow composite (h=20): 4 signals, ls_contrarian dropped (OOS collapse 93%)
+# Weights: ICIR-proportional at h=20, conservative reallocation per Opus Q4
 SLOW_SIGNALS = [
     "volatility",
     "liquidity",
     "momentum_30d",
-    "ls_contrarian",
     "taker_buy_contrarian",
 ]
 SLOW_WEIGHTS = {
-    "volatility":          (+1, 0.35),  # ICIR=0.467 at h=20 — dominant
-    "liquidity":           (-1, 0.30),  # ICIR strong at h=20
-    "momentum_30d":        (+1, 0.15),  # significant at h=20
-    "ls_contrarian":       (+1, 0.12),  # ICIR=0.254 at h=20 — validated
-    "taker_buy_contrarian":(-1, 0.08),  # significant at h=20
+    "volatility":          (+1, 0.38),  # ICIR_h20=0.467, dominant
+    "liquidity":           (-1, 0.32),  # ICIR_h20=0.453, strong
+    "momentum_30d":        (+1, 0.18),  # ICIR_h20=0.282, solid OOS
+    "taker_buy_contrarian":(-1, 0.12),  # ICIR_h20=0.408, keep conservative (93% OOS boost concern)
 }
 
 # ── DATA LOADING ──────────────────────────────────────────────────────────────
