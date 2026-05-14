@@ -44,6 +44,7 @@ def load_data(data_dir='./merged_data/'):
         df['volume'] = df['volume'].astype(float)
         df['quote_volume'] = df['quote_volume'].astype(float)
         df['taker_buy_volume'] = df['taker_buy_volume'].astype(float)
+        df.index = df.index.normalize()  # strip time component → date-only alignment
         symbols[symbol] = df
     
     print(f"Loaded {len(symbols)} symbols")
@@ -60,6 +61,7 @@ def load_metrics(metrics_dir='./merged_metrics/'):
     for fp in files:
         sym = os.path.basename(fp).replace('-metrics-daily.csv', '')
         df  = pd.read_csv(fp, index_col='date', parse_dates=True)
+        df.index = df.index.normalize()  # strip time component → date-only alignment
         metrics[sym] = df
     print(f"Loaded metrics for {len(metrics)} symbols")
     return metrics
