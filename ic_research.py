@@ -34,7 +34,7 @@ def load_data(data_dir='./merged_data/'):
     print(f"Loading {len(csv_files)} CSV files...")
     
     for fp in csv_files:
-        symbol = os.path.basename(fp).replace('.csv', '')
+        symbol = os.path.basename(fp).replace('.csv', '').replace('-1d-full', '')
         df = pd.read_csv(fp)
         df['date'] = pd.to_datetime(df['open_time'], unit='ms')
         df = df.set_index('date').sort_index()
