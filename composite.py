@@ -85,10 +85,11 @@ def load_ohlcv() -> dict:
     """Load all OHLCV CSVs into {symbol: DataFrame}."""
     symbols = {}
     for fp in glob.glob(f"{OHLCV_DIR}/*.csv"):
-        sym = os.path.basename(fp).replace(".csv", "")
+        sym = os.path.basename(fp).replace(".csv", "").replace("-1d-full", "")
         df  = pd.read_csv(fp)
         df["date"] = pd.to_datetime(df["open_time"], unit="ms")
         df  = df.set_index("date").sort_index()
+        df.index = df.index.normalize()
         for col in ["close", "high", "low", "volume", "taker_buy_volume"]:
             df[col] = df[col].astype(float)
         symbols[sym] = df
@@ -102,6 +103,7 @@ def load_metrics() -> dict:
     for fp in glob.glob(f"{METRICS_DIR}/*-metrics-daily.csv"):
         sym = os.path.basename(fp).replace("-metrics-daily.csv", "")
         df  = pd.read_csv(fp, index_col="date", parse_dates=True)
+        df.index = df.index.normalize()
         metrics[sym] = df
     if metrics:
         print(f"Loaded metrics for {len(metrics)} symbols")
