@@ -1,0 +1,28 @@
+=== REGIME FILTER SENSITIVITY — VERDICT ===
+
+Baseline (no filter): Sharpe=-0.40, CAGR=-13.0%
+Best threshold: 1.3x → Sharpe=-0.26, CAGR=-9.7%
+Sharpe improvement: +0.15
+Thresholds that improve vs baseline: 9/11 (82%)
+2025 Sharpe drop at best threshold: -3%
+
+VERDICT: ✅ ROBUST — improvement is structural, not data-mined
+   Recommended threshold: 1.3x
+   >70% of thresholds improve vs baseline
+   2025 performance not significantly hurt
+
+=== Annual Returns by Threshold ===
+Threshold        2022     2023     2024     2025   Sharpe     CAGR
+-----------------------------------------------------------------
+1.0x            -6.8%   -48.2%   -17.7%    47.8%    -0.41   -13.2%
+1.1x            -6.5%   -49.0%    -8.1%    48.0%    -0.31   -10.9%
+1.2x            -6.4%   -45.4%   -11.2%    44.0%    -0.30   -10.8%
+1.3x            -3.0%   -43.1%   -15.1%    46.2%    -0.26    -9.7%
+1.4x            -8.0%   -44.0%   -14.5%    42.7%    -0.34   -11.6%
+1.5x            -7.9%   -46.0%   -11.7%    43.0%    -0.34   -11.6%
+1.6x            -8.1%   -43.1%   -12.7%    40.2%    -0.32   -11.2%
+1.7x            -7.7%   -43.8%   -17.1%    46.6%    -0.34   -11.6%
+1.8x            -7.6%   -43.9%   -18.6%    47.3%    -0.36   -11.9%
+2.0x            -6.9%   -42.1%   -17.8%    44.9%    -0.32   -11.1%
+2.5x            -6.9%   -47.3%   -18.2%    44.5%    -0.43   -13.4%
+baseline        -6.9%   -47.3%   -16.6%    44.5%    -0.40   -13.0%
