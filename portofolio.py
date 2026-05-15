@@ -114,7 +114,7 @@ def compute_symbol_vol(returns: pd.DataFrame) -> pd.DataFrame:
     """Per-symbol EWMA volatility (annualized)."""
     alpha = 1 - np.exp(-np.log(2) / VOL_EWMA_HL)
     sym_vol = returns.ewm(alpha=alpha, min_periods=10).std() * np.sqrt(365)
-    sym_vol = sym_vol.replace(0, np.nan).fillna(method="ffill").fillna(0.5)
+    sym_vol = sym_vol.replace(0, np.nan).ffill().fillna(0.5)
     return sym_vol.clip(lower=0.05)  # floor at 5% ann vol
 
 
@@ -340,6 +340,7 @@ def run_simulation(
         if dd < MAX_DRAWDOWN_FLAT and pause_counter == 0:
             pause_counter     = PAUSE_DAYS
             leverage_override = RESTART_SIZE
+            hwm = nav  # reset HWM after flatten
             print(f"  🚨 [{date.date()}] Max DD {dd:.2%} → flatten + pause {PAUSE_DAYS}d")
 
         # ── 10. UPDATE STATE ───────────────────────────────────────────────
@@ -457,13 +458,11 @@ def compute_monthly_returns(pnl_df: pd.DataFrame) -> pd.DataFrame:
     monthly = pnl_df["daily_ret"].resample("ME").apply(
         lambda x: (1 + x).prod() - 1
     )
-    monthly.index = monthly.index.to_period("M")
-    table = monthly.unstack(level=0) if hasattr(monthly.index, "month") else monthly.to_frame("return")
-    # Pivot to year x month
+    # Keep as DatetimeIndex, extract year/month directly
     df = monthly.reset_index()
-    df.columns = ["period", "return"]
-    df["year"]  = df["period"].dt.year
-    df["month"] = df["period"].dt.month
+    df.columns = ["date", "return"]
+    df["year"]  = df["date"].dt.year
+    df["month"] = df["date"].dt.month
     pivot = df.pivot(index="year", columns="month", values="return")
     pivot.columns = ["Jan","Feb","Mar","Apr","May","Jun",
                      "Jul","Aug","Sep","Oct","Nov","Dec"][:len(pivot.columns)]
