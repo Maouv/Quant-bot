@@ -41,7 +41,7 @@ OUT_DIR       = "./portfolio"
 
 # Vol targeting
 VOL_TARGET    = 0.15          # 15% annualized
-EWMA_HALFLIFE = 20            # days, for portfolio vol estimation
+EWMA_HALFLIFE = 60            # days — was 20, longer = less reactive to single bad day
 VOL_EWMA_HL   = 30            # days, for per-symbol vol estimation
 
 # Position limits
@@ -50,10 +50,10 @@ MAX_GROSS_EXPOSURE = 3.0      # 3x hard cap
 MAX_NET_EXPOSURE   = 0.10     # ±10% net limit
 
 # Risk rules
-DAILY_LOSS_LIMIT   = -0.025   # -2.5% NAV → halve leverage next day
-MAX_DRAWDOWN_FLAT  = -0.15    # -15% from HWM → flatten + pause
-PAUSE_DAYS         = 5        # days to pause after flatten
-RESTART_SIZE       = 0.50     # restart at 50% of normal size
+DAILY_LOSS_LIMIT   = -0.045   # was -0.025 — triggers 3-5x/year not 15x/year
+MAX_DRAWDOWN_FLAT  = -0.20    # was -0.15 — give strategy room to recover
+PAUSE_DAYS         = 3        # was 5 — faster recovery
+RESTART_SIZE       = 0.75     # was 0.50 — less aggressive penalty
 
 # Turnover buffer
 TURNOVER_BUFFER    = 0.02     # τ=0.02, don't trade if delta < 2%
@@ -167,23 +167,20 @@ def apply_leverage(
     portfolio_vol: float,
     btc_vol: float,
     btc_vol_median: float,
-    leverage_override: float = 1.0,
 ) -> pd.Series:
     """
     Scale weights by vol-targeting leverage × regime scaler.
     leverage = min(vol_target / portfolio_vol, max_gross/2)
     regime_scale = min(1.0, btc_vol_median / btc_vol)
+    leverage_override removed — vol-targeting handles risk scaling organically.
     """
     if portfolio_vol <= 0:
         lev = 1.0
     else:
         lev = min(VOL_TARGET / portfolio_vol, MAX_GROSS_EXPOSURE / 2)
 
-    # Regime scaler
     regime_scale = min(1.0, btc_vol_median / btc_vol) if btc_vol > 0 else 1.0
-
-    # Apply override (from risk rules)
-    lev = lev * regime_scale * leverage_override
+    lev = lev * regime_scale
 
     return w * lev
 
@@ -257,9 +254,7 @@ def run_simulation(
     hwm             = INITIAL_NAV
     current_w       = pd.Series(dtype=float)
     port_returns    = []
-    leverage_override = 1.0
     pause_counter   = 0
-    restart_counter = 0
 
     # Output storage
     pnl_rows      = []
@@ -302,7 +297,7 @@ def run_simulation(
                 # ── 5. LEVERAGE ────────────────────────────────────────────
                 target_w_lev = apply_leverage(
                     target_w_raw, port_vol_ewm * np.sqrt(365),
-                    btc_vol_today, btc_vol_median, leverage_override
+                    btc_vol_today, btc_vol_median
                 )
 
                 # ── 6. TURNOVER BUFFER ─────────────────────────────────────
@@ -331,15 +326,8 @@ def run_simulation(
         )
 
         # ── 9. RISK CHECKS ─────────────────────────────────────────────────
-        leverage_override = 1.0  # reset
-
-        if net_ret < DAILY_LOSS_LIMIT:
-            leverage_override = 0.5
-            print(f"  ⚠️  [{date.date()}] Daily loss {net_ret:.2%} → halving leverage")
-
         if dd < MAX_DRAWDOWN_FLAT and pause_counter == 0:
-            pause_counter     = PAUSE_DAYS
-            leverage_override = RESTART_SIZE
+            pause_counter = PAUSE_DAYS
             hwm = nav  # reset HWM after flatten
             print(f"  🚨 [{date.date()}] Max DD {dd:.2%} → flatten + pause {PAUSE_DAYS}d")
 
@@ -371,7 +359,6 @@ def run_simulation(
             "port_vol_ann": port_vol_ewm * np.sqrt(365),
             "btc_vol":      btc_vol_today,
             "regime_scale": min(1.0, btc_vol_median / btc_vol_today),
-            "lev_override": leverage_override,
             "paused":       pause_counter > 0,
         })
 
@@ -646,4 +633,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
