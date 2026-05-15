@@ -45,7 +45,10 @@ EWMA_HALFLIFE = 60            # days — was 20, longer = less reactive to singl
 VOL_EWMA_HL   = 30            # days, for per-symbol vol estimation
 
 # Position limits
-MAX_POS_PER_SYMBOL = 0.12     # 12% per leg max
+MAX_POS_PER_SYMBOL = 0.12     # 12% per leg max (long)
+MAX_SHORT_PER_SYMBOL = 0.06   # 6% short cap — asymmetric: short convexity adjustment
+                               # math: short_cap = long_cap × e^(-σ²T/2) ≈ 12% × 0.5
+                               # σ=100% ann, T=5d → convexity penalty = 1.4% per position
 MAX_GROSS_EXPOSURE = 3.0      # 3x hard cap
 MAX_NET_EXPOSURE   = 0.10     # ±10% net limit
 
@@ -155,7 +158,7 @@ def compute_target_weights(
 
     if len(shorts) > 0:
         w_short = shorts / shorts.abs().sum()
-        w_short = w_short.clip(lower=-MAX_POS_PER_SYMBOL)
+        w_short = w_short.clip(lower=-MAX_SHORT_PER_SYMBOL)  # asymmetric cap vs longs
         w_short = w_short / w_short.abs().sum()  # renormalize
         w_final[shorts.index] = w_short
 
@@ -633,5 +636,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 

@@ -2,22 +2,22 @@
 (In-sample simulation — not a proper walk-forward backtest)
 
 --- Performance ---
-Total Return:        -41.90%
-CAGR:                -12.93%
-Ann. Volatility:      25.18%
-Sharpe Ratio:          -0.42
-Sortino Ratio:         -0.67
-Max Drawdown:        -21.77%
-Calmar Ratio:          -0.59
-Win Rate:             51.50%
-Profit Factor:          0.87
+Total Return:        -33.58%
+CAGR:                 -9.91%
+Ann. Volatility:      25.20%
+Sharpe Ratio:          -0.28
+Sortino Ratio:         -0.53
+Max Drawdown:        -22.56%
+Calmar Ratio:          -0.44
+Win Rate:             51.29%
+Profit Factor:          0.90
 
 --- Exposure & Costs ---
 Avg Gross Exp:          1.13x
-Avg Net Exp:          -0.89%
-Total Cost:            7.50%
-Avg Daily Cost:      0.0052%
-Avg Daily TO:          7.49%
+Avg Net Exp:          -0.75%
+Total Cost:            8.09%
+Avg Daily Cost:      0.0057%
+Avg Daily TO:          8.08%
 
 --- Risk Events ---
 Daily Loss Events:         8
