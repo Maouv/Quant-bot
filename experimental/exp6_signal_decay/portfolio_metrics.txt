@@ -1,0 +1,40 @@
+=== EXP6: SIGNAL DECAY EXIT + PARTIAL TP ===
+(Experimental modification to portfolio.py)
+
+--- EXP6 Parameters ---
+Decay exit ratio: 0.4
+Partial TP: 5.0% gain → reduce 50.0%
+
+--- Performance ---
+Total Return:        -46.42%
+CAGR:                -14.71%
+Ann. Volatility:      25.72%
+Sharpe Ratio:          -0.48
+Sortino Ratio:         -0.77
+Max Drawdown:        -21.39%
+Calmar Ratio:          -0.69
+Win Rate:             50.66%
+Profit Factor:          0.89
+
+--- Exposure & Costs ---
+Avg Gross Exp:          1.07x
+Avg Net Exp:          -2.84%
+Total Cost:           12.80%
+Avg Daily Cost:      0.0089%
+Avg Daily TO:         12.78%
+
+--- Risk Events ---
+Daily Loss Events:         6
+Paused Days:              18
+Simulation Days:        1431
+
+--- EXP6 Specific Metrics ---
+Total Decay Exits:        1774
+Total Partial TPs:        3121
+Avg Decay Exits/Day:     1.240
+Avg Partial TP/Day:      2.181
+
+--- Sanity Checks ---
+Sharpe in range (0.5-5.0):  ⚠️ SUSPICIOUS
+Max DD < 50%:               ✅
+Costs < 30% of gross P&L:   ✅
