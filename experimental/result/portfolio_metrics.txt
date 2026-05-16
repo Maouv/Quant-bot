@@ -1,0 +1,34 @@
+=== EXP1: CONVICTION FILTER EXPERIMENT ===
+(Conviction threshold = 0.5)
+
+--- Performance ---
+Total Return:        -53.14%
+CAGR:                -17.58%
+Ann. Volatility:      26.64%
+Sharpe Ratio:          -0.58
+Sortino Ratio:         -0.85
+Max Drawdown:        -21.95%
+Calmar Ratio:          -0.80
+Win Rate:             51.08%
+Profit Factor:          0.85
+
+--- Exposure & Costs ---
+Avg Gross Exp:          1.07x
+Avg Net Exp:           0.09%
+Total Cost:           13.92%
+Avg Daily Cost:      0.0097%
+Avg Daily TO:         13.90%
+
+--- Experiment Parameters ---
+Conviction Threshold:     0.50
+Avg Positions/Day:        12.9
+
+--- Risk Events ---
+Daily Loss Events:         9
+Paused Days:              24
+Simulation Days:        1431
+
+--- Sanity Checks ---
+Sharpe in range (0.5-5.0):  ⚠️ SUSPICIOUS
+Max DD < 50%:               ✅
+Costs < 30% of gross P&L:   ✅
