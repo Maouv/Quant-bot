@@ -1,0 +1,33 @@
+=== EXP5: FASTER REGIME FILTER (DUAL WINDOW) ===
+Fast window: 10d, Slow window: 60d
+Fast trigger: 2.0x median → cut 50%
+(In-sample simulation — not a proper walk-forward backtest)
+
+--- Performance ---
+Total Return:        -24.16%
+CAGR:                 -6.81%
+Ann. Volatility:      25.07%
+Sharpe Ratio:          -0.15
+Sortino Ratio:         -0.37
+Max Drawdown:        -22.56%
+Calmar Ratio:          -0.30
+Win Rate:             51.50%
+Profit Factor:          0.91
+
+--- Exposure & Costs ---
+Avg Gross Exp:          1.13x
+Avg Net Exp:          -0.63%
+Total Cost:            8.24%
+Avg Daily Cost:      0.0058%
+Avg Daily TO:          8.23%
+
+--- Risk Events ---
+Daily Loss Events:         8
+Paused Days:              15
+Fast Triggers:            46
+Simulation Days:        1431
+
+--- Sanity Checks ---
+Sharpe in range (0.5-5.0):  ⚠️ SUSPICIOUS
+Max DD < 50%:               ✅
+Costs < 30% of gross P&L:   ⚠️ HIGH COSTS

@@ -1,0 +1,31 @@
+=== EXP4: SYMMETRIC CAPS 10%/10% ===
+Long cap: 0.1, Short cap: 0.1
+(In-sample simulation — not a proper walk-forward backtest)
+
+--- Performance ---
+Total Return:        -40.49%
+CAGR:                -12.40%
+Ann. Volatility:      25.21%
+Sharpe Ratio:          -0.39
+Sortino Ratio:         -0.64
+Max Drawdown:        -20.72%
+Calmar Ratio:          -0.60
+Win Rate:             51.71%
+Profit Factor:          0.87
+
+--- Exposure & Costs ---
+Avg Gross Exp:          1.13x
+Avg Net Exp:          -0.68%
+Total Cost:            7.66%
+Avg Daily Cost:      0.0054%
+Avg Daily TO:          7.64%
+
+--- Risk Events ---
+Daily Loss Events:         8
+Paused Days:              15
+Simulation Days:        1431
+
+--- Sanity Checks ---
+Sharpe in range (0.5-5.0):  ⚠️ SUSPICIOUS
+Max DD < 50%:               ✅
+Costs < 30% of gross P&L:   ✅

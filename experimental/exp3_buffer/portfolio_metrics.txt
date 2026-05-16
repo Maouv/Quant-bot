@@ -1,0 +1,31 @@
+=== EXP3: LARGER BUFFER + MIN HOLD PERIOD ===
+Buffer: 0.05, Min Hold: 3 days
+(In-sample simulation — not a proper walk-forward backtest)
+
+--- Performance ---
+Total Return:        -25.91%
+CAGR:                 -7.36%
+Ann. Volatility:      24.18%
+Sharpe Ratio:          -0.19
+Sortino Ratio:         -0.41
+Max Drawdown:        -21.66%
+Calmar Ratio:          -0.34
+Win Rate:             52.27%
+Profit Factor:          0.88
+
+--- Exposure & Costs ---
+Avg Gross Exp:          1.01x
+Avg Net Exp:          -1.62%
+Total Cost:            5.05%
+Avg Daily Cost:      0.0035%
+Avg Daily TO:          5.04%
+
+--- Risk Events ---
+Daily Loss Events:         5
+Paused Days:              15
+Simulation Days:        1431
+
+--- Sanity Checks ---
+Sharpe in range (0.5-5.0):  ⚠️ SUSPICIOUS
+Max DD < 50%:               ✅
+Costs < 30% of gross P&L:   ✅
