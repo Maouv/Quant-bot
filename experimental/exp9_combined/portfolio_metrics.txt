@@ -1,0 +1,38 @@
+=== EXP9: BTC GATE + DUAL REGIME (COMBINED) ===
+(In-sample simulation — not a proper walk-forward backtest)
+
+--- Combined Parameters ---
+BTC gate: 20d momentum > 15% → shorts 30%
+Regime: fast=10d, slow=60d dual window
+
+--- Trigger Statistics ---
+Gate triggered:    157 days (11.0%)
+Fast regime triggered: 46 days (3.2%)
+
+--- Performance ---
+Total Return:         -4.75%
+CAGR:                 -1.23%
+Ann. Volatility:      24.53%
+Sharpe Ratio:           0.08
+Sortino Ratio:         -0.07
+Max Drawdown:        -18.63%
+Calmar Ratio:          -0.07
+Win Rate:             52.27%
+Profit Factor:          0.91
+
+--- Exposure & Costs ---
+Avg Gross Exp:          1.08x
+Avg Net Exp:           1.00%
+Total Cost:            9.88%
+Avg Daily Cost:      0.0069%
+Avg Daily TO:          9.86%
+
+--- Risk Events ---
+Daily Loss Events:        15
+Paused Days:              16
+Simulation Days:        1431
+
+--- Sanity Checks ---
+Sharpe in range (0.5-5.0):  ⚠️ SUSPICIOUS
+Max DD < 50%:               ✅
+Costs < 30% of gross P&L:   ⚠️ HIGH COSTS

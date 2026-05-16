@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """
-EXP8: BTC Momentum Gate
-=======================
-Altseason requires BTC rally first. If BTC 20d momentum > +15%, reduce short exposure 70%.
+EXP9: BTC Gate + Dual Regime (Combined)
+=======================================
+Combines:
+- BTC momentum gate from exp8: reduce short exposure when BTC rallying
+- Dual regime filter from exp5: fast/slow vol scaling for all exposure
 
-Based on: portofolio.py (base simulation engine)
-Concept: BTC acts as gatekeeper for altcoin short positions.
+BTC gate → scale short leg only
+Regime scale → scale all exposure (long + short)
+Both applied independently.
 """
 
 import os
@@ -20,20 +23,20 @@ from pathlib import Path
 
 COMPOSITE_DIR = "./composite"
 OHLCV_DIR     = "./merged_data"
-OUT_DIR       = "./experimental/exp8_btc_gate"
+OUT_DIR       = "./experimental/exp9_combined"
 
 # Vol targeting
 VOL_TARGET    = 0.15
 EWMA_HALFLIFE = 60
 VOL_EWMA_HL   = 30
 
-# Position limits
-MAX_POS_PER_SYMBOL = 0.13
+# Position limits (from exp8)
+MAX_POS_PER_SYMBOL   = 0.13
 MAX_SHORT_PER_SYMBOL = 0.05
-MAX_GROSS_EXPOSURE = 3.0
-MAX_NET_EXPOSURE   = 0.10
+MAX_GROSS_EXPOSURE   = 3.0
+MAX_NET_EXPOSURE     = 0.10
 
-# Risk rules
+# Risk rules (from exp8)
 DAILY_LOSS_LIMIT   = -0.035
 MAX_DRAWDOWN_FLAT  = -0.17
 PAUSE_DAYS         = 4
@@ -46,13 +49,15 @@ MAX_TURNOVER_LEG   = 0.40
 # Transaction costs
 COST_PER_TRADE     = 0.0007
 
-# Regime filter
-BTC_VOL_WINDOW     = 60
+# ── EXP9: BTC GATE + DUAL REGIME ───────────────────────────────────────────────
+# BTC momentum gate (from exp8)
+BTC_MOM_WINDOW    = 20
+BTC_MOM_THRESHOLD = 0.15
+SHORT_SCALE_GATE  = 0.30
 
-# ── EXP8: BTC MOMENTUM GATE ────────────────────────────────────────────────────
-BTC_MOM_WINDOW    = 20      # 20-day momentum window
-BTC_MOM_THRESHOLD = 0.15    # +15% in 20 days = altseason signal
-SHORT_SCALE_GATE  = 0.30    # reduce shorts to 30% when gate triggers
+# Dual regime filter (from exp5)
+BTC_VOL_FAST = 10
+BTC_VOL_SLOW = 60
 
 # Simulation
 INITIAL_NAV        = 100_000
@@ -83,15 +88,25 @@ def load_returns() -> pd.DataFrame:
     return ret_df
 
 
-def load_btc_vol(returns: pd.DataFrame) -> pd.Series:
+def load_btc_vol(returns: pd.DataFrame) -> tuple:
+    """Dual-window BTC vol for regime filter."""
     if "BTCUSDT" not in returns.columns:
         print("  ⚠️  BTCUSDT not found — regime filter disabled")
-        return pd.Series(1.0, index=returns.index)
+        dummy = pd.Series(1.0, index=returns.index)
+        return dummy, dummy, 1.0, 1.0
+    
     btc = returns["BTCUSDT"]
-    btc_vol = btc.rolling(BTC_VOL_WINDOW).std() * np.sqrt(365)
-    btc_vol_median = btc_vol.median()
-    print(f"BTC 60d vol median: {btc_vol_median:.1%}")
-    return btc_vol, btc_vol_median
+    
+    btc_vol_fast = btc.rolling(BTC_VOL_FAST).std() * np.sqrt(365)
+    btc_vol_fast_median = btc_vol_fast.median()
+    
+    btc_vol_slow = btc.rolling(BTC_VOL_SLOW).std() * np.sqrt(365)
+    btc_vol_slow_median = btc_vol_slow.median()
+    
+    print(f"BTC {BTC_VOL_FAST}d vol median: {btc_vol_fast_median:.1%}")
+    print(f"BTC {BTC_VOL_SLOW}d vol median: {btc_vol_slow_median:.1%}")
+    
+    return btc_vol_fast, btc_vol_slow, btc_vol_fast_median, btc_vol_slow_median
 
 
 def load_btc_close() -> pd.Series:
@@ -120,10 +135,7 @@ def compute_target_weights(
     sym_vol: pd.Series,
     short_scale: float = 1.0,
 ) -> pd.Series:
-    """
-    Compute target weights for one day.
-    short_scale: reduce short exposure when BTC momentum gate triggers.
-    """
+    """Compute target weights. short_scale from BTC gate."""
     common = scores.index.intersection(sym_vol.index)
     s = scores[common].dropna()
     v = sym_vol[common].reindex(s.index).fillna(0.5)
@@ -152,7 +164,7 @@ def compute_target_weights(
         w_short = shorts / shorts.abs().sum()
         w_short = w_short.clip(lower=-MAX_SHORT_PER_SYMBOL)
         w_short = w_short / w_short.abs().sum()
-        w_final[shorts.index] = w_short * short_scale  # apply gate
+        w_final[shorts.index] = w_short * short_scale
 
     return w_final
 
@@ -160,18 +172,28 @@ def compute_target_weights(
 def apply_leverage(
     w: pd.Series,
     portfolio_vol: float,
-    btc_vol: float,
-    btc_vol_median: float,
-) -> pd.Series:
+    btc_vol_fast: float,
+    btc_vol_slow: float,
+    btc_vol_fast_median: float,
+    btc_vol_slow_median: float,
+) -> tuple:
+    """
+    Apply vol-targeting leverage + dual regime scaling.
+    Returns (scaled_weights, fast_scale, slow_scale, regime_scale)
+    """
     if portfolio_vol <= 0:
         lev = 1.0
     else:
         lev = min(VOL_TARGET / portfolio_vol, MAX_GROSS_EXPOSURE / 2)
 
-    regime_scale = min(1.0, btc_vol_median / btc_vol) if btc_vol > 0 else 1.0
-    lev = lev * regime_scale
+    # Dual regime: fast trigger + slow scaler
+    fast_trigger = btc_vol_fast > (2.0 * btc_vol_fast_median)
+    fast_scale = 0.5 if fast_trigger else 1.0
+    slow_scale = min(1.0, btc_vol_slow_median / btc_vol_slow) if btc_vol_slow > 0 else 1.0
+    regime_scale = fast_scale * slow_scale
 
-    return w * lev
+    lev = lev * regime_scale
+    return w * lev, fast_scale, slow_scale, regime_scale
 
 
 def apply_turnover_buffer(
@@ -215,11 +237,15 @@ def apply_turnover_buffer(
 def run_simulation(
     scores: pd.DataFrame,
     returns: pd.DataFrame,
-    btc_vol_series: pd.Series,
-    btc_vol_median: float,
+    btc_vol_fast_series: pd.Series,
+    btc_vol_slow_series: pd.Series,
+    btc_vol_fast_median: float,
+    btc_vol_slow_median: float,
     btc_mom: pd.Series,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    print("\n=== RUNNING SIMULATION (EXP8: BTC MOMENTUM GATE) ===")
+) -> tuple:
+    print("\n=== EXP9: BTC GATE + DUAL REGIME (COMBINED) ===")
+    print(f"BTC gate: {BTC_MOM_WINDOW}d momentum > {BTC_MOM_THRESHOLD:.0%} → shorts {SHORT_SCALE_GATE:.0%}")
+    print(f"Regime: fast={BTC_VOL_FAST}d, slow={BTC_VOL_SLOW}d dual window\n")
 
     sym_vol = compute_symbol_vol(returns)
 
@@ -246,11 +272,15 @@ def run_simulation(
         if len(score_today) < 5:
             continue
 
-        btc_vol_today = btc_vol_series.get(date, btc_vol_median)
-        if pd.isna(btc_vol_today) or btc_vol_today == 0:
-            btc_vol_today = btc_vol_median
+        # Get dual-window vol values
+        btc_vol_fast_today = btc_vol_fast_series.get(date, btc_vol_fast_median)
+        btc_vol_slow_today = btc_vol_slow_series.get(date, btc_vol_slow_median)
+        if pd.isna(btc_vol_fast_today) or btc_vol_fast_today == 0:
+            btc_vol_fast_today = btc_vol_fast_median
+        if pd.isna(btc_vol_slow_today) or btc_vol_slow_today == 0:
+            btc_vol_slow_today = btc_vol_slow_median
 
-        # ── EXP8: BTC MOMENTUM GATE ──────────────────────────────────────
+        # BTC momentum gate (independent from regime)
         btc_mom_today = btc_mom.get(date, 0)
         if pd.isna(btc_mom_today):
             btc_mom_today = 0
@@ -262,6 +292,7 @@ def run_simulation(
             actual_w = pd.Series(0.0, index=current_w.index)
             trades   = current_w.abs()
             current_w = pd.Series(dtype=float)
+            fast_scale, slow_scale, regime_scale = 1.0, 1.0, 1.0
         else:
             sym_vol_today = sym_vol.loc[date] if date in sym_vol.index else pd.Series(0.5, index=score_today.index)
             target_w_raw  = compute_target_weights(score_today, sym_vol_today, short_scale)
@@ -269,10 +300,12 @@ def run_simulation(
             if len(target_w_raw) == 0:
                 actual_w = pd.Series(dtype=float)
                 trades   = pd.Series(dtype=float)
+                fast_scale, slow_scale, regime_scale = 1.0, 1.0, 1.0
             else:
-                target_w_lev = apply_leverage(
+                target_w_lev, fast_scale, slow_scale, regime_scale = apply_leverage(
                     target_w_raw, port_vol_ewm * np.sqrt(365),
-                    btc_vol_today, btc_vol_median
+                    btc_vol_fast_today, btc_vol_slow_today,
+                    btc_vol_fast_median, btc_vol_slow_median
                 )
 
                 actual_w = apply_turnover_buffer(target_w_lev, current_w)
@@ -324,8 +357,11 @@ def run_simulation(
             "n_long":       n_long,
             "n_short":      n_short,
             "port_vol_ann": port_vol_ewm * np.sqrt(365),
-            "btc_vol":      btc_vol_today,
-            "regime_scale": min(1.0, btc_vol_median / btc_vol_today),
+            "btc_vol_fast": btc_vol_fast_today,
+            "btc_vol_slow": btc_vol_slow_today,
+            "fast_scale":   fast_scale,
+            "slow_scale":   slow_scale,
+            "regime_scale": regime_scale,
             "paused":       pause_counter > 0,
             "btc_mom":      btc_mom_today,
             "short_scale":  short_scale,
@@ -380,6 +416,7 @@ def compute_metrics(pnl_df: pd.DataFrame) -> dict:
 
     n_daily_loss = (rets < DAILY_LOSS_LIMIT).sum()
     n_paused     = pnl_df["paused"].sum() if "paused" in pnl_df else 0
+    n_fast_triggers = (pnl_df["fast_scale"] < 1.0).sum() if "fast_scale" in pnl_df else 0
 
     return {
         "total_return":    total_ret,
@@ -398,6 +435,7 @@ def compute_metrics(pnl_df: pd.DataFrame) -> dict:
         "avg_turnover":    avg_turnover,
         "n_daily_loss_events": n_daily_loss,
         "n_paused_days":   n_paused,
+        "n_fast_triggers": n_fast_triggers,
         "n_days":          len(rets),
     }
 
@@ -452,7 +490,7 @@ def create_charts(pnl_df: pd.DataFrame, metrics: dict):
     ax1.axhline(1.0, color="black", linewidth=0.5, linestyle="--")
     ax1.set_ylabel("NAV (normalized)")
     ax1.set_title(
-        f"EXP8: BTC Momentum Gate\n"
+        f"EXP9: BTC Gate + Dual Regime (Combined)\n"
         f"CAGR={metrics['cagr']:.1%}  Sharpe={metrics['sharpe']:.2f}  "
         f"MaxDD={metrics['max_drawdown']:.1%}  Calmar={metrics['calmar']:.2f}"
     )
@@ -483,7 +521,6 @@ def create_charts(pnl_df: pd.DataFrame, metrics: dict):
     ax4.axhline(BTC_MOM_THRESHOLD, color="green", linewidth=1.5, linestyle="--",
                 label=f"Gate threshold ({BTC_MOM_THRESHOLD:.0%})")
     ax4.axhline(0, color="black", linewidth=0.5)
-    # Shade gate active periods
     gate_mask = pnl_df["gate_active"]
     if gate_mask.any():
         ax4.fill_between(pnl_df.index, -0.5, 1.0, where=gate_mask, 
@@ -512,15 +549,22 @@ def save_outputs(pnl_df, positions, metrics, monthly, attribution):
     # Gate stats
     n_gate_days = pnl_df["gate_active"].sum()
     pct_gate = n_gate_days / len(pnl_df)
+    
+    # Fast trigger stats
+    n_fast_days = (pnl_df["fast_scale"] < 1.0).sum()
+    pct_fast = n_fast_days / len(pnl_df)
 
     with open(f"{OUT_DIR}/portfolio_metrics.txt", "w") as f:
-        f.write("=== EXP8: BTC MOMENTUM GATE ===\n")
+        f.write("=== EXP9: BTC GATE + DUAL REGIME (COMBINED) ===\n")
         f.write("(In-sample simulation — not a proper walk-forward backtest)\n\n")
 
-        f.write("--- Gate Parameters ---\n")
-        f.write(f"BTC mom window: {BTC_MOM_WINDOW}d, threshold: {BTC_MOM_THRESHOLD:.0%}\n")
-        f.write(f"Short scale when gate active: {SHORT_SCALE_GATE}\n")
-        f.write(f"Gate triggered: {n_gate_days} days ({pct_gate:.1%} of time)\n\n")
+        f.write("--- Combined Parameters ---\n")
+        f.write(f"BTC gate: {BTC_MOM_WINDOW}d momentum > {BTC_MOM_THRESHOLD:.0%} → shorts {SHORT_SCALE_GATE:.0%}\n")
+        f.write(f"Regime: fast={BTC_VOL_FAST}d, slow={BTC_VOL_SLOW}d dual window\n\n")
+
+        f.write("--- Trigger Statistics ---\n")
+        f.write(f"Gate triggered:    {n_gate_days} days ({pct_gate:.1%})\n")
+        f.write(f"Fast regime triggered: {n_fast_days} days ({pct_fast:.1%})\n\n")
 
         f.write("--- Performance ---\n")
         f.write(f"Total Return:     {metrics['total_return']:>10.2%}\n")
@@ -577,16 +621,21 @@ def main():
     returns = returns[common_syms]
     print(f"Common symbols: {len(common_syms)}")
 
-    # BTC vol for regime filter
-    btc_vol_series, btc_vol_median = load_btc_vol(returns)
+    # BTC dual-window vol for regime filter
+    btc_vol_fast_series, btc_vol_slow_series, btc_vol_fast_median, btc_vol_slow_median = load_btc_vol(returns)
 
-    # ── EXP8: BTC MOMENTUM ──────────────────────────────────────────────
+    # BTC momentum for gate
     btc_close = load_btc_close()
     btc_mom = btc_close / btc_close.shift(BTC_MOM_WINDOW) - 1
-    print(f"BTC 20d momentum: {btc_mom.dropna().min():.1%} to {btc_mom.dropna().max():.1%}")
+    print(f"BTC {BTC_MOM_WINDOW}d momentum: {btc_mom.dropna().min():.1%} to {btc_mom.dropna().max():.1%}")
 
     # Run simulation
-    positions, pnl_df = run_simulation(scores, returns, btc_vol_series, btc_vol_median, btc_mom)
+    positions, pnl_df = run_simulation(
+        scores, returns,
+        btc_vol_fast_series, btc_vol_slow_series,
+        btc_vol_fast_median, btc_vol_slow_median,
+        btc_mom
+    )
 
     if pnl_df.empty:
         print("❌ No P&L generated — check data alignment")
@@ -601,6 +650,8 @@ def main():
     # Print key metrics
     n_gate_days = pnl_df["gate_active"].sum()
     pct_gate = n_gate_days / len(pnl_df)
+    n_fast_days = (pnl_df["fast_scale"] < 1.0).sum()
+    pct_fast = n_fast_days / len(pnl_df)
     
     print(f"\n  CAGR:         {metrics['cagr']:>8.2%}")
     print(f"  Sharpe:       {metrics['sharpe']:>8.2f}")
@@ -610,13 +661,14 @@ def main():
     print(f"  Ann Vol:      {metrics['ann_vol']:>8.2%}")
     print(f"  Avg Gross:    {metrics['avg_gross_exp']:>8.2f}x")
     print(f"  Total Cost:   {metrics['total_cost_pct']:>8.2%}")
-    print(f"\n  Gate active:  {n_gate_days} days ({pct_gate:.1%} of time)")
+    print(f"\n  Gate triggered:    {n_gate_days} days ({pct_gate:.1%})")
+    print(f"  Fast regime triggered: {n_fast_days} days ({pct_fast:.1%})")
 
     # Charts + save
     create_charts(pnl_df, metrics)
     save_outputs(pnl_df, positions, metrics, monthly, attribution)
 
-    print("\nDone. Read experimental/exp8_btc_gate/portfolio_metrics.txt for full results.")
+    print("\nDone. Read experimental/exp9_combined/portfolio_metrics.txt for full results.")
 
 
 if __name__ == "__main__":

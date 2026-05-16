@@ -7,26 +7,26 @@ Short scale when gate active: 0.3
 Gate triggered: 157 days (11.0% of time)
 
 --- Performance ---
-Total Return:        -17.07%
-CAGR:                 -4.66%
-Ann. Volatility:      24.66%
-Sharpe Ratio:          -0.06
-Sortino Ratio:         -0.25
-Max Drawdown:        -22.56%
-Calmar Ratio:          -0.21
-Win Rate:             52.48%
-Profit Factor:          0.89
+Total Return:        -12.56%
+CAGR:                 -3.37%
+Ann. Volatility:      24.59%
+Sharpe Ratio:          -0.01
+Sortino Ratio:         -0.18
+Max Drawdown:        -18.14%
+Calmar Ratio:          -0.19
+Win Rate:             51.50%
+Profit Factor:          0.92
 
 --- Exposure & Costs ---
 Avg Gross Exp:          1.09x
-Avg Net Exp:           0.91%
-Total Cost:            9.65%
-Avg Daily Cost:      0.0067%
-Avg Daily TO:          9.63%
+Avg Net Exp:           1.30%
+Total Cost:            9.92%
+Avg Daily Cost:      0.0069%
+Avg Daily TO:          9.90%
 
 --- Risk Events ---
-Daily Loss Events:         6
-Paused Days:              12
+Daily Loss Events:        14
+Paused Days:              20
 Simulation Days:        1431
 
 --- Sanity Checks ---
