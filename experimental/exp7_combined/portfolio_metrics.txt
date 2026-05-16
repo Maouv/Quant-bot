@@ -1,0 +1,34 @@
+=== EXP7: COMBINED (Buffer 0.05 + Dual Regime) ===
+Buffer: 0.05
+Fast window: 10d, Slow window: 60d
+Fast trigger: 2.0x median → cut 50%
+(In-sample simulation — not a proper walk-forward backtest)
+
+--- Performance ---
+Total Return:        -33.35%
+CAGR:                 -9.83%
+Ann. Volatility:      23.95%
+Sharpe Ratio:          -0.30
+Sortino Ratio:         -0.55
+Max Drawdown:        -21.66%
+Calmar Ratio:          -0.45
+Win Rate:             51.64%
+Profit Factor:          0.88
+
+--- Exposure & Costs ---
+Avg Gross Exp:          1.00x
+Avg Net Exp:          -1.55%
+Total Cost:            5.26%
+Avg Daily Cost:      0.0037%
+Avg Daily TO:          5.25%
+
+--- Risk Events ---
+Daily Loss Events:         5
+Paused Days:              15
+Fast Triggers:            46
+Simulation Days:        1431
+
+--- Sanity Checks ---
+Sharpe in range (0.5-5.0):  ⚠️ SUSPICIOUS
+Max DD < 50%:               ✅
+Costs < 30% of gross P&L:   ✅

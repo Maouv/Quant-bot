@@ -1,0 +1,22 @@
+=== TIME LAG ANALYSIS ===
+Generated: 2026-05-16 05:19:47
+Total observations: 1429
+
+IC SUMMARY:
+IC_same_day: mean=+0.0255  ICIR=+0.082  t=+3.33  (signal vs same day return)
+IC_lag0:     mean=+0.0656  ICIR=+0.215  t=+8.68  (current implementation)
+IC_lag1:     mean=+0.0623  ICIR=+0.204  t=+8.33  (signal shifted 1 day)
+IC_lag2:     mean=+0.0603  ICIR=+0.199  t=+8.17  (signal shifted 2 days)
+
+BY YEAR:
+Year      lag0_IC    lag1_IC    lag2_IC
+2022      +0.0689    +0.0576    +0.0539
+2023      +0.0359    +0.0348    +0.0309
+2024      +0.0700    +0.0688    +0.0676
+2025      +0.0879    +0.0877    +0.0882
+
+VERDICT:
+  ✅ NO TIME LAG — signal fresh, trade timing OK
+  ✅ NO INTRADAY PRICE-IN
+
+=== END ===
