@@ -61,7 +61,7 @@ BTC_VOL_SLOW = 60
 
 # ── EXP11: DISPERSION SCALING ──────────────────────────────────────────────────
 CS_STD_SMOOTHING = 5     # smooth over 5 days
-DISP_THRESHOLD   = 0.5   # 50% of median = breakeven
+DISP_THRESHOLD   = 0.7   # 70% of median = breakeven
 DISP_SCALE_FLOOR = 0.3   # never go below 30% exposure
 
 # ── EXP11: ROLLING IC SCALING ──────────────────────────────────────────────────
@@ -150,7 +150,7 @@ def compute_dispersion_scale(returns: pd.DataFrame) -> pd.Series:
     disp_ratio = cs_std_smooth / cs_std_median
     
     # Scale: higher dispersion = lower scale
-    disp_scale = (DISP_THRESHOLD / disp_ratio).clip(DISP_SCALE_FLOOR, 1.0)
+    disp_scale = (disp_ratio / DISP_THRESHOLD).clip(DISP_SCALE_FLOOR, 1.0)
     
     print(f"Dispersion scale: min={disp_scale.min():.2f}, mean={disp_scale.mean():.2f}, max={disp_scale.max():.2f}")
     return disp_scale
