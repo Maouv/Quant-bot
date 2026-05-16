@@ -16,26 +16,26 @@ Avg dispersion scale:  0.98
 Avg IC scale:          0.82
 
 --- Performance ---
-Total Return:         24.45%
-CAGR:                  5.74%
-Ann. Volatility:      22.10%
-Sharpe Ratio:           0.37
-Sortino Ratio:          0.35
-Max Drawdown:        -18.48%
-Calmar Ratio:           0.31
-Win Rate:             51.85%
-Profit Factor:          0.97
+Total Return:         31.07%
+CAGR:                  7.15%
+Ann. Volatility:      22.16%
+Sharpe Ratio:           0.43
+Sortino Ratio:          0.43
+Max Drawdown:        -17.54%
+Calmar Ratio:           0.41
+Win Rate:             51.15%
+Profit Factor:          1.01
 
 --- Exposure & Costs ---
 Avg Gross Exp:          0.97x
-Avg Net Exp:           1.36%
-Total Cost:           10.22%
-Avg Daily Cost:      0.0071%
-Avg Daily TO:         10.21%
+Avg Net Exp:           1.68%
+Total Cost:           13.07%
+Avg Daily Cost:      0.0091%
+Avg Daily TO:         13.04%
 
 --- Risk Events ---
-Daily Loss Events:         8
-Paused Days:              16
+Daily Loss Events:        10
+Paused Days:              12
 Simulation Days:        1431
 
 --- Sanity Checks ---

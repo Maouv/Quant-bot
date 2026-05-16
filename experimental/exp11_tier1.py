@@ -43,7 +43,7 @@ PAUSE_DAYS         = 4
 RESTART_SIZE       = 0.75
 
 # Turnover buffer
-TURNOVER_BUFFER    = 0.02
+TURNOVER_BUFFER    = 0.01
 MAX_TURNOVER_LEG   = 0.40
 
 # Transaction costs
