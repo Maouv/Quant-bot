@@ -1,0 +1,31 @@
+=== EXP2: DUAL EWMA VOL TARGETING ===
+Fast HL: 10, Slow HL: 60
+(In-sample simulation — not a proper walk-forward backtest)
+
+--- Performance ---
+Total Return:        -43.20%
+CAGR:                -13.44%
+Ann. Volatility:      24.28%
+Sharpe Ratio:          -0.46
+Sortino Ratio:         -0.74
+Max Drawdown:        -21.44%
+Calmar Ratio:          -0.63
+Win Rate:             51.36%
+Profit Factor:          0.87
+
+--- Exposure & Costs ---
+Avg Gross Exp:          1.09x
+Avg Net Exp:          -0.94%
+Total Cost:            8.30%
+Avg Daily Cost:      0.0058%
+Avg Daily TO:          8.29%
+
+--- Risk Events ---
+Daily Loss Events:         6
+Paused Days:              18
+Simulation Days:        1431
+
+--- Sanity Checks ---
+Sharpe in range (0.5-5.0):  ⚠️ SUSPICIOUS
+Max DD < 50%:               ✅
+Costs < 30% of gross P&L:   ✅
