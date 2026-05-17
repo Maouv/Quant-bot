@@ -251,6 +251,11 @@ def run_simulation(scores: pd.DataFrame, returns: pd.DataFrame, betas: pd.DataFr
                 target_w_neutral = beta_neutralize(target_w_raw, betas_today)
                 port_beta_after = (target_w_neutral * betas_today.reindex(target_w_neutral.index, fill_value=1.0)).sum()
                 
+                if i < 5:
+                    print(f"  DEBUG [{date.date()}] raw weights: {len(target_w_raw)} symbols, sum_abs={target_w_raw.abs().sum():.3f}")
+                    print(f"  DEBUG [{date.date()}] betas available: {betas_today.notna().sum()} symbols")
+                    print(f"  DEBUG [{date.date()}] after beta-neutral: sum_abs={target_w_neutral.abs().sum():.3f}")
+                
                 # Re-check net exposure after beta adjustment
                 net = target_w_neutral.sum()
                 if abs(net) > MAX_NET_EXPOSURE:
@@ -287,9 +292,9 @@ def run_simulation(scores: pd.DataFrame, returns: pd.DataFrame, betas: pd.DataFr
             hwm = nav
             print(f"  🚨 [{date.date()}] Max DD {dd:.2%} → flatten + pause {PAUSE_DAYS}d")
         
-        if abs(net_ret) < abs(DAILY_LOSS_LIMIT) and pause_counter == 0:
+        if net_ret < DAILY_LOSS_LIMIT and pause_counter == 0:
             pause_counter = PAUSE_DAYS
-            print(f"  🛑 [{date.date()}] Daily loss {net_ret:.2%} > {DAILY_LOSS_LIMIT:.0%} → pause {PAUSE_DAYS}d")
+            print(f"  🛑 [{date.date()}] Daily loss {net_ret:.2%} < {DAILY_LOSS_LIMIT:.0%} → pause {PAUSE_DAYS}d")
         
         gross_exp = actual_w.abs().sum()
         net_exp = actual_w.sum()

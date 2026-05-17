@@ -8,18 +8,18 @@ Parameters removed vs exp11: 9 (all regime/filter params)
 Parameters added: 0 (beta window = signal horizon, not tuned)
 
 --- Performance Metrics ---
-Total Return:      0.00%
-Annualized Return: 0.00%
-Annualized Vol:    0.45%
-Sharpe Ratio:      0.00
-Max Drawdown:      0.00%
-Avg Gross Exp:     0.00
-Win Rate:          0.1%
-Profit Factor:     0.00
-Total Trades:      0
+Total Return:      -66.50%
+Annualized Return: -24.34%
+Annualized Vol:    16.20%
+Sharpe Ratio:      -1.50
+Max Drawdown:      -18.78%
+Avg Gross Exp:     0.78
+Win Rate:          47.7%
+Profit Factor:     0.79
+Total Trades:      558
 Years:             3.9
 
 --- Beta Diagnostics ---
-Avg portfolio beta before neutralization: 0.000
+Avg portfolio beta before neutralization: -0.403
 Avg portfolio beta after neutralization:  ~0.000 (by construction)
 Max |portfolio beta| after neutralization: ~0.000 (by construction)
